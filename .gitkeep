@@ -1,0 +1,4 @@
+# Este directorio será un Git submodule
+# Para configurarlo:
+# 1. Crear repositorio multisystem-database en GitHub/GitLab
+# 2. git submodule add https://github.com/andcast77/multisystem-database.git services/database
