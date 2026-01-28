@@ -12,9 +12,12 @@
     "studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^5.18.1"
+    "@prisma/client": "^7.0.0",
+    "@prisma/adapter-pg": "^7.0.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
-    "prisma": "^5.18.1"
+    "prisma": "^7.0.0",
+    "dotenv": "^16.4.5"
   }
 }
