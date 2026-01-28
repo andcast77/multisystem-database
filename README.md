@@ -1,67 +1,81 @@
 # Multisystem Database
 
-Repositorio independiente para gestionar Prisma (schema, migraciones, cliente) de Multisystem.
+Servicio Prisma + **Neon** (Postgres serverless): schema, migraciones y cliente. Configurado según [Prisma + Neon](https://www.prisma.io/docs/orm/overview/databases/neon) y [Neon Prisma guide](https://neon.com/docs/guides/prisma).
 
-## Descripción
+## Contenido
 
-Este repositorio contiene:
-- **Prisma Schema**: Definición de la estructura de la base de datos
-- **Migraciones**: Historial de cambios del schema
-- **Prisma Client**: Cliente TypeScript exportado para consumo por otros servicios
+- **Prisma Schema**: Definición de la base de datos
+- **Migraciones**: `prisma/migrations`
+- **Cliente**: Generado en `generated/prisma`, exportado vía `src/client.ts` usando `@prisma/adapter-neon` (driver serverless de Neon)
 
 ## Estructura
 
 ```
-multisystem-database/
+services/database/
 ├── prisma/
-│   ├── schema.prisma      # Schema de Prisma
-│   └── migrations/        # Migraciones de BD
+│   ├── schema.prisma
+│   └── migrations/
+├── generated/
+│   └── prisma/
 ├── src/
-│   └── client.ts          # Cliente Prisma exportado
+│   └── client.ts
 ├── package.json
-├── tsconfig.json
-└── Dockerfile
+├── prisma.config.ts
+└── tsconfig.json
 ```
 
 ## Uso
 
-Este paquete es consumido por `services/api/` mediante dependencia local:
-
 ```json
 {
   "dependencies": {
-    "@multisystem/database": "file:../database"
+    "@multisystem/database": "workspace:*"
   }
 }
 ```
 
 ```typescript
-// En services/api/
 import { prisma } from '@multisystem/database'
 
-export async function getProducts() {
-  return prisma.product.findMany()
-}
+const users = await prisma.user.findMany()
 ```
 
 ## Scripts
 
-- `pnpm generate` - Genera Prisma Client
-- `pnpm migrate:dev` - Ejecuta migraciones en desarrollo
-- `pnpm migrate:deploy` - Ejecuta migraciones en producción
-- `pnpm db:push` - Sincroniza schema con BD (desarrollo)
-- `pnpm studio` - Abre Prisma Studio
+| Comando | Descripción |
+|--------|-------------|
+| `pnpm generate` | Genera Prisma Client |
+| `pnpm migrate:dev` | Migraciones en desarrollo |
+| `pnpm migrate:deploy` | Migraciones en producción |
+| `pnpm db:push` | Sincroniza schema con BD |
+| `pnpm studio` | Prisma Studio |
+
+## Variables de entorno (Neon)
+
+En `.env` en la raíz del servicio:
+
+```bash
+# Pooled (Prisma Client en runtime). Usar URL con -pooler en el host.
+DATABASE_URL=postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/dbname?sslmode=require
+
+# Directa (Prisma CLI: migrate, studio, etc.). Sin -pooler.
+DIRECT_URL=postgresql://user:pass@ep-xxx.region.aws.neon.tech/dbname?sslmode=require
+```
+
+- **DATABASE_URL**: conexión **pooled** (`-pooler`), usada por el cliente en la API.
+- **DIRECT_URL**: conexión **directa**, usada por `prisma migrate`, `prisma studio`, etc. Si no existe, el CLI usa `DATABASE_URL`.
+
+`pnpm generate` no necesita BD; migrate/studio requieren al menos una de las dos en `.env`. Ambas en [Neon Console](https://console.neon.tech) → Connect. Opcional: `?sslmode=require&connect_timeout=10` para evitar timeouts en cold start.
 
 ## Migraciones
 
 ```bash
 cd services/database
-pnpm prisma migrate dev --name nombre_migracion
-pnpm prisma generate
+pnpm migrate:dev --name nombre_migracion
+pnpm generate
 ```
 
-## Variables de Entorno
+## Referencias
 
-```bash
-DATABASE_URL=postgresql://user:password@postgres:5432/multisystem_db
-```
+- [Prisma + Neon](https://www.prisma.io/docs/orm/overview/databases/neon)
+- [Neon – Connect from Prisma](https://neon.com/docs/guides/prisma)
