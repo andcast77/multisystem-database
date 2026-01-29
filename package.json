@@ -17,19 +17,26 @@
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
     "studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
     "@prisma/adapter-neon": "^7.3.0",
     "@prisma/client": "^7.3.0",
+    "bcryptjs": "^2.4.3",
     "dotenv": "^17.2.3",
     "ws": "^8.19.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^25.1.0",
     "@types/ws": "^8.18.1",
     "prisma": "^7.3.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.3"
   }
 }

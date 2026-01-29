@@ -48,6 +48,7 @@ const users = await prisma.user.findMany()
 | `pnpm migrate:dev` | Migraciones en desarrollo |
 | `pnpm migrate:deploy` | Migraciones en producción |
 | `pnpm db:push` | Sincroniza schema con BD |
+| `pnpm db:seed` | Ejecuta seeds para llenar BD con datos iniciales |
 | `pnpm studio` | Prisma Studio |
 
 ## Variables de entorno (Neon)
@@ -66,6 +67,50 @@ DIRECT_URL=postgresql://user:pass@ep-xxx.region.aws.neon.tech/dbname?sslmode=req
 - **DIRECT_URL**: conexión **directa**, usada por `prisma migrate`, `prisma studio`, etc. Si no existe, el CLI usa `DATABASE_URL`.
 
 `pnpm generate` no necesita BD; migrate/studio requieren al menos una de las dos en `.env`. Ambas en [Neon Console](https://console.neon.tech) → Connect. Opcional: `?sslmode=require&connect_timeout=10` para evitar timeouts en cold start.
+
+## Seeds
+
+El proyecto incluye un seed completo con datos iniciales para ambos módulos (Workify y Shopflow).
+
+### Ejecutar Seeds
+
+```bash
+cd services/database
+pnpm db:seed
+```
+
+O usando Prisma directamente:
+
+```bash
+cd services/database
+pnpm prisma db seed
+```
+
+### Contenido del Seed
+
+El seed incluye:
+
+**Workify:**
+- Empresa de ejemplo (Acme Inc.)
+- Departamentos (Recursos Humanos, Tecnología)
+- Posiciones (Gerente, Desarrollador)
+- Roles (Administrador, Empleado)
+- Turnos de trabajo (Mañana, Tarde)
+- Usuarios de ejemplo (admin@acme.com, user@acme.com)
+- Empleados vinculados a usuarios
+- Días festivos
+
+**Shopflow:**
+- Categorías (Electrónica, Ropa)
+- Proveedores (Tech Supplies Inc., Fashion Wholesale)
+- Productos de ejemplo (Laptop Dell XPS 15, Camiseta Básica)
+- Clientes (Juan Pérez, María García)
+- Configuración de tienda
+- Configuración de tickets
+- Configuración de fidelidad
+- Venta de ejemplo con puntos de fidelidad
+
+**Nota**: El seed limpia todos los datos existentes antes de insertar nuevos datos.
 
 ## Migraciones
 
