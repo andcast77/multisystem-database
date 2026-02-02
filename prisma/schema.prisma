@@ -17,10 +17,18 @@ datasource db {
 // ENUMS COMPARTIDOS
 // ========================================
 
+/// Rol a nivel plataforma/legacy (Shopflow). Para control por empresa usar MembershipRole en CompanyMember.
 enum UserRole {
   USER
   ADMIN
   SUPERADMIN
+}
+
+/// Rol de pertenencia a una empresa: owner (registrante), admin de empresa, o usuario estándar.
+enum MembershipRole {
+  OWNER   // Registrante; control total (eliminar empresa, transferir ownership)
+  ADMIN   // Admin de empresa; no puede eliminar empresa ni transferir ownership
+  USER    // Usuario estándar de la empresa
 }
 
 enum SaleStatus {
@@ -171,10 +179,17 @@ model User {
   phone             String?
   role              UserRole @default(USER)
   isActive          Boolean  @default(true)
+  /// Superusuario: puede acceder a cualquier empresa sin ser miembro. No es usuario de empresa.
+  isSuperuser       Boolean  @default(false)
   twoFactorEnabled  Boolean  @default(false)
   twoFactorSecret   String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  // Empresas que posee (registrante / owner)
+  companiesOwned    Company[]       @relation("CompanyOwner")
+  // Pertenencia a empresas (owner/admin/user por empresa)
+  companyMemberships CompanyMember[]
 
   // Relaciones Workify
   userRoles         UserRoleAssignment[]
@@ -185,7 +200,7 @@ model User {
   sales             Sale[]
   actionHistory      ActionHistory[]
   notifications     Notification[]
-  userPreferences   UserPreferences?
+  userPreferences   UserPreferences[]
   notificationPreferences NotificationPreference?
   inventoryTransfers InventoryTransfer[]
 
@@ -200,8 +215,20 @@ model Company {
   id          String   @id @default(uuid())
   name        String   @unique
   parentId    String?
+  /// Usuario que registró la empresa (owner). No es un "usuario de empresa" normal.
+  ownerUserId String?
+  /// Módulo Workify (RRHH) activo para esta empresa.
+  workifyEnabled   Boolean  @default(false)
+  /// Módulo Shopflow (ventas) activo para esta empresa.
+  shopflowEnabled  Boolean  @default(false)
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // Owner (registrante)
+  owner       User?    @relation("CompanyOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  // Miembros de la empresa (owner, admin, user)
+  members     CompanyMember[]
 
   // Relaciones jerárquicas
   parent      Company?  @relation("CompanyHierarchy", fields: [parentId], references: [id])
@@ -223,7 +250,39 @@ model Company {
   integrationLogs  IntegrationLog[]
   notifications    Notification[]
 
+  // Shopflow
+  products          Product[]
+  categories        Category[]
+  suppliers         Supplier[]
+  customers        Customer[]
+  sales             Sale[]
+  storeConfigs      StoreConfig[]
+  ticketConfigs     TicketConfig[]
+  inventoryTransfers InventoryTransfer[]
+  loyaltyConfigs    LoyaltyConfig[]
+  loyaltyPoints     LoyaltyPoint[]
+  actionHistories   ActionHistory[]
+  stores            Store[]
+  userPreferences   UserPreferences[]
+
   @@map("companies")
+}
+
+/// Pertenencia de un usuario a una empresa con rol: owner (registrante), admin o user.
+/// El superuser no tiene filas aquí. El owner tiene una fila con OWNER; admins y usuarios con ADMIN/USER.
+model CompanyMember {
+  id             String         @id @default(uuid())
+  userId         String
+  companyId      String
+  membershipRole MembershipRole
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@map("company_members")
 }
 
 model Department {
@@ -630,9 +689,10 @@ model Translation {
 
 model Product {
   id          String   @id @default(uuid())
+  companyId   String?
   name        String
   description String?
-  sku         String?  @unique
+  sku         String?
   barcode     String?
   price       Decimal  @db.Decimal(10, 2)
   cost        Decimal? @db.Decimal(10, 2)
@@ -648,27 +708,29 @@ model Product {
   updatedAt   DateTime @updatedAt
 
   // Relaciones
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   category         Category?           @relation(fields: [categoryId], references: [id])
   supplier         Supplier?           @relation(fields: [supplierId], references: [id])
   saleItems        SaleItem[]
   inventoryTransfers InventoryTransfer[]
 
+  @@unique([companyId, sku])
   @@map("products")
 }
 
 model Category {
   id          String    @id @default(uuid())
+  companyId   String?
   name        String
   description String?
   parentId    String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  // Relaciones jerárquicas
+  // Relaciones
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   parent      Category? @relation("CategoryParent", fields: [parentId], references: [id])
   children    Category[] @relation("CategoryParent")
-
-  // Relaciones
   products    Product[]
 
   @@map("categories")
@@ -676,6 +738,7 @@ model Category {
 
 model Supplier {
   id        String    @id @default(uuid())
+  companyId String?
   name      String
   email     String?
   phone     String?
@@ -688,6 +751,7 @@ model Supplier {
   updatedAt DateTime  @updatedAt
 
   // Relaciones
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   products  Product[]
 
   @@map("suppliers")
@@ -695,6 +759,7 @@ model Supplier {
 
 model Customer {
   id        String    @id @default(uuid())
+  companyId String?
   name      String
   email     String?
   phone     String?
@@ -703,6 +768,7 @@ model Customer {
   updatedAt DateTime  @updatedAt
 
   // Relaciones
+  company   Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   sales           Sale[]
   loyaltyPoints   LoyaltyPoint[]
 
@@ -711,9 +777,10 @@ model Customer {
 
 model Sale {
   id           String        @id @default(uuid())
+  companyId    String?
   customerId   String?
   userId       String
-  invoiceNumber String?      @unique
+  invoiceNumber String?
   total        Decimal       @db.Decimal(10, 2)
   subtotal     Decimal       @db.Decimal(10, 2)
   tax          Decimal       @db.Decimal(10, 2)
@@ -725,11 +792,13 @@ model Sale {
   updatedAt    DateTime      @updatedAt
 
   // Relaciones
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer      Customer?    @relation(fields: [customerId], references: [id])
   user          User         @relation(fields: [userId], references: [id])
   items         SaleItem[]
   loyaltyPoints LoyaltyPoint[]
 
+  @@unique([companyId, invoiceNumber])
   @@map("sales")
 }
 
@@ -751,6 +820,7 @@ model SaleItem {
 
 model StoreConfig {
   id                    String   @id @default(uuid())
+  companyId             String?
   name                  String
   address               String?
   phone                 String?
@@ -765,11 +835,30 @@ model StoreConfig {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   @@map("store_configs")
+}
+
+model Store {
+  id        String    @id @default(uuid())
+  companyId String?
+  name      String
+  code      String
+  address   String?
+  phone     String?
+  email     String?
+  taxId     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  company   Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  @@map("stores")
 }
 
 model TicketConfig {
   id                String     @id @default(uuid())
+  companyId         String?
   storeId           String?
   ticketType        TicketType @default(TICKET)
   header            String?
@@ -784,24 +873,29 @@ model TicketConfig {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   @@map("ticket_configs")
 }
 
 model UserPreferences {
   id        String   @id @default(uuid())
-  userId    String   @unique
+  userId    String
+  companyId String?
   language  String   @default("es")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relaciones
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, companyId])
   @@map("user_preferences")
 }
 
 model InventoryTransfer {
   id          String        @id @default(uuid())
+  companyId   String?
   fromStoreId String
   toStoreId   String
   productId   String
@@ -814,6 +908,7 @@ model InventoryTransfer {
   updatedAt   DateTime      @updatedAt
 
   // Relaciones
+  company     Company?      @relation(fields: [companyId], references: [id], onDelete: Cascade)
   product     Product       @relation(fields: [productId], references: [id])
   createdBy   User          @relation(fields: [createdById], references: [id])
 
@@ -822,6 +917,7 @@ model InventoryTransfer {
 
 model LoyaltyConfig {
   id                    String   @id @default(uuid())
+  companyId             String?
   pointsPerDollar       Decimal  @db.Decimal(10, 2)
   redemptionRate        Decimal  @db.Decimal(10, 4)
   pointsExpireMonths    Int?
@@ -831,11 +927,13 @@ model LoyaltyConfig {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+  company     Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   @@map("loyalty_configs")
 }
 
 model LoyaltyPoint {
   id          String           @id @default(uuid())
+  companyId   String?
   customerId  String
   saleId      String?
   points      Int
@@ -845,6 +943,7 @@ model LoyaltyPoint {
   createdAt   DateTime         @default(now())
 
   // Relaciones
+  company     Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer    Customer         @relation(fields: [customerId], references: [id])
   sale        Sale?            @relation(fields: [saleId], references: [id])
 
@@ -892,6 +991,7 @@ model NotificationPreference {
 
 model ActionHistory {
   id          String     @id @default(uuid())
+  companyId   String?
   userId      String
   action      ActionType
   entityType  EntityType
@@ -902,6 +1002,7 @@ model ActionHistory {
   createdAt   DateTime   @default(now())
 
   // Relaciones
+  company     Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("action_history")
