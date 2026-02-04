@@ -201,6 +201,7 @@ async function main() {
       phone: '+1234500000',
       role: 'SUPERADMIN',
       isActive: true,
+      isSuperuser: true,
     },
   })
 
@@ -229,16 +230,13 @@ async function main() {
   })
   console.log(`✅ Usuarios creados: ${superuser.email}, ${acmeGerente.email}, ${acmeVentas.email}`)
 
-  // Asignar owner Acme = superusuario; miembros = superuser + usuarios @acme.com
+  // Acme: owner = gerente (superuser no es miembro de ninguna empresa)
   await prisma.company.update({
     where: { id: company.id },
-    data: { ownerUserId: superuser.id },
+    data: { ownerUserId: acmeGerente.id },
   })
   await prisma.companyMember.create({
-    data: { userId: superuser.id, companyId: company.id, membershipRole: 'OWNER' },
-  })
-  await prisma.companyMember.create({
-    data: { userId: acmeGerente.id, companyId: company.id, membershipRole: 'ADMIN' },
+    data: { userId: acmeGerente.id, companyId: company.id, membershipRole: 'OWNER' },
   })
   await prisma.companyMember.create({
     data: { userId: acmeVentas.id, companyId: company.id, membershipRole: 'USER' },
@@ -684,15 +682,13 @@ async function main() {
   })
   console.log(`✅ Usuarios Beta creados: ${gerenteBeta.email}, ${ventasBeta.email}`)
 
+  // Beta: owner = gerente (superuser no es miembro de ninguna empresa)
   await prisma.company.update({
     where: { id: company2.id },
-    data: { ownerUserId: superuser.id },
+    data: { ownerUserId: gerenteBeta.id },
   })
   await prisma.companyMember.create({
-    data: { userId: superuser.id, companyId: company2.id, membershipRole: 'OWNER' },
-  })
-  await prisma.companyMember.create({
-    data: { userId: gerenteBeta.id, companyId: company2.id, membershipRole: 'ADMIN' },
+    data: { userId: gerenteBeta.id, companyId: company2.id, membershipRole: 'OWNER' },
   })
   await prisma.companyMember.create({
     data: { userId: ventasBeta.id, companyId: company2.id, membershipRole: 'USER' },

@@ -183,11 +183,14 @@ model User {
   isSuperuser       Boolean  @default(false)
   twoFactorEnabled  Boolean  @default(false)
   twoFactorSecret   String?
+  /// Empresa preferida/por defecto en Shopflow; se asigna automáticamente si es null (primera por nombre).
+  shopflowPreferredCompanyId String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   // Empresas que posee (registrante / owner)
   companiesOwned    Company[]       @relation("CompanyOwner")
+  shopflowPreferredCompany Company?  @relation("ShopflowPreferredCompany", fields: [shopflowPreferredCompanyId], references: [id], onDelete: SetNull)
   // Pertenencia a empresas (owner/admin/user por empresa)
   companyMemberships CompanyMember[]
 
@@ -264,6 +267,7 @@ model Company {
   actionHistories   ActionHistory[]
   stores            Store[]
   userPreferences   UserPreferences[]
+  usersWithPreferredShopflow User[] @relation("ShopflowPreferredCompany")
 
   @@map("companies")
 }
