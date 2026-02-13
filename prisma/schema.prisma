@@ -206,6 +206,7 @@ model User {
   userPreferences   UserPreferences[]
   notificationPreferences NotificationPreference?
   inventoryTransfers InventoryTransfer[]
+  userStores        UserStore[]
 
   @@map("users")
 }
@@ -782,6 +783,7 @@ model Customer {
 model Sale {
   id           String        @id @default(uuid())
   companyId    String?
+  storeId      String?
   customerId   String?
   userId       String
   invoiceNumber String?
@@ -797,6 +799,7 @@ model Sale {
 
   // Relaciones
   company      Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  store        Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
   customer      Customer?    @relation(fields: [customerId], references: [id])
   user          User         @relation(fields: [userId], references: [id])
   items         SaleItem[]
@@ -857,7 +860,23 @@ model Store {
   updatedAt DateTime  @updatedAt
 
   company   Company?   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sales     Sale[]
+  userStores UserStore[]
   @@map("stores")
+}
+
+/// Locales asignados a usuarios con rol USER. OWNER/ADMIN/superuser tienen acceso a todos los locales.
+model UserStore {
+  id        String   @id @default(uuid())
+  userId    String
+  storeId   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@map("user_stores")
 }
 
 model TicketConfig {

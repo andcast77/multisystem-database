@@ -17,54 +17,71 @@ const prisma = new PrismaClient({
   log: ['error', 'warn'],
 })
 
+/** Ejecuta deleteMany e ignora si la tabla no existe (P2021). */
+async function safeDeleteMany(
+  label: string,
+  fn: () => Promise<unknown>
+): Promise<void> {
+  try {
+    await fn()
+  } catch (e: unknown) {
+    const err = e as { code?: string }
+    if (err?.code === 'P2021') return // Table does not exist
+    throw e
+  }
+}
+
 async function main() {
   console.log('🌱 Iniciando seed de la base de datos unificada...')
 
   // Limpiar todas las tablas en orden correcto (respetando relaciones)
   console.log('🧹 Limpiando datos existentes...')
-  
-  // Limpiar en orden inverso de dependencias
-  await prisma.actionHistory.deleteMany()
-  await prisma.notificationPreference.deleteMany()
-  await prisma.notification.deleteMany()
-  await prisma.loyaltyPoint.deleteMany()
-  await prisma.saleItem.deleteMany()
-  await prisma.sale.deleteMany()
-  await prisma.inventoryTransfer.deleteMany()
-  await prisma.product.deleteMany()
-  await prisma.category.deleteMany()
-  await prisma.supplier.deleteMany()
-  await prisma.customer.deleteMany()
-  await prisma.userPreferences.deleteMany()
-  await prisma.ticketConfig.deleteMany()
-  await prisma.storeConfig.deleteMany()
-  await prisma.loyaltyConfig.deleteMany()
-  
+
+  const clear = (label: string, fn: () => Promise<unknown>) => safeDeleteMany(label, fn)
+
+  // Limpiar en orden inverso de dependencias (ignorar tablas que no existan)
+  await clear('actionHistory', () => prisma.actionHistory.deleteMany())
+  await clear('notificationPreference', () => prisma.notificationPreference.deleteMany())
+  await clear('notification', () => prisma.notification.deleteMany())
+  await clear('loyaltyPoint', () => prisma.loyaltyPoint.deleteMany())
+  await clear('saleItem', () => prisma.saleItem.deleteMany())
+  await clear('sale', () => prisma.sale.deleteMany())
+  await clear('inventoryTransfer', () => prisma.inventoryTransfer.deleteMany())
+  await clear('product', () => prisma.product.deleteMany())
+  await clear('category', () => prisma.category.deleteMany())
+  await clear('supplier', () => prisma.supplier.deleteMany())
+  await clear('customer', () => prisma.customer.deleteMany())
+  await clear('userPreferences', () => prisma.userPreferences.deleteMany())
+  await clear('ticketConfig', () => prisma.ticketConfig.deleteMany())
+  await clear('storeConfig', () => prisma.storeConfig.deleteMany())
+  await clear('loyaltyConfig', () => prisma.loyaltyConfig.deleteMany())
+  await clear('store', () => prisma.store.deleteMany())
+
   // Workify
-  await prisma.userRoleAssignment.deleteMany()
-  await prisma.userPermission.deleteMany()
-  await prisma.rolePermission.deleteMany()
-  await prisma.permission.deleteMany()
-  await prisma.license.deleteMany()
-  await prisma.payroll.deleteMany()
-  await prisma.payrollRule.deleteMany()
-  await prisma.document.deleteMany()
-  await prisma.specialDayAssignment.deleteMany()
-  await prisma.schedule.deleteMany()
-  await prisma.timeEntry.deleteMany()
-  await prisma.employee.deleteMany()
-  await prisma.holiday.deleteMany()
-  await prisma.workShift.deleteMany()
-  await prisma.position.deleteMany()
-  await prisma.department.deleteMany()
-  await prisma.role.deleteMany()
-  await prisma.auditLog.deleteMany()
-  await prisma.integrationLog.deleteMany()
-  await prisma.report.deleteMany()
-  await prisma.translation.deleteMany()
-  await prisma.companyMember.deleteMany()
-  await prisma.company.deleteMany()
-  await prisma.user.deleteMany()
+  await clear('userRoleAssignment', () => prisma.userRoleAssignment.deleteMany())
+  await clear('userPermission', () => prisma.userPermission.deleteMany())
+  await clear('rolePermission', () => prisma.rolePermission.deleteMany())
+  await clear('permission', () => prisma.permission.deleteMany())
+  await clear('license', () => prisma.license.deleteMany())
+  await clear('payroll', () => prisma.payroll.deleteMany())
+  await clear('payrollRule', () => prisma.payrollRule.deleteMany())
+  await clear('document', () => prisma.document.deleteMany())
+  await clear('specialDayAssignment', () => prisma.specialDayAssignment.deleteMany())
+  await clear('schedule', () => prisma.schedule.deleteMany())
+  await clear('timeEntry', () => prisma.timeEntry.deleteMany())
+  await clear('employee', () => prisma.employee.deleteMany())
+  await clear('holiday', () => prisma.holiday.deleteMany())
+  await clear('workShift', () => prisma.workShift.deleteMany())
+  await clear('position', () => prisma.position.deleteMany())
+  await clear('department', () => prisma.department.deleteMany())
+  await clear('role', () => prisma.role.deleteMany())
+  await clear('auditLog', () => prisma.auditLog.deleteMany())
+  await clear('integrationLog', () => prisma.integrationLog.deleteMany())
+  await clear('report', () => prisma.report.deleteMany())
+  await clear('translation', () => prisma.translation.deleteMany())
+  await clear('companyMember', () => prisma.companyMember.deleteMany())
+  await clear('company', () => prisma.company.deleteMany())
+  await clear('user', () => prisma.user.deleteMany())
 
   console.log('✅ Datos limpiados correctamente')
 
@@ -84,30 +101,84 @@ async function main() {
   })
   console.log(`✅ Empresa creada: ${company.name} (ID: ${company.id}) - Shopflow y Workify`)
 
-  // 2. Crear departamentos
-  const hrDepartment = await prisma.department.create({
+  // 2. Crear usuarios (necesarios para company members y Shopflow)
+  const hashedPassword = await bcrypt.hash('password123', 10)
+  const superuser = await prisma.user.create({
     data: {
-      name: 'Recursos Humanos',
-      description: 'Departamento de recursos humanos',
-      companyId: company.id,
+      email: 'admin@multiflow.com',
+      password: hashedPassword,
+      firstName: 'Admin',
+      lastName: 'Multiflow',
+      phone: '+1234500000',
+      role: 'SUPERADMIN',
+      isActive: true,
+      isSuperuser: true,
     },
   })
-
-  const itDepartment = await prisma.department.create({
+  const acmeGerente = await prisma.user.create({
     data: {
-      name: 'Tecnología',
-      description: 'Departamento de tecnología',
-      companyId: company.id,
+      email: 'gerente@acme.com',
+      password: hashedPassword,
+      firstName: 'Roberto',
+      lastName: 'Acme',
+      phone: '+1234567890',
+      role: 'ADMIN',
+      isActive: true,
     },
   })
-  console.log(`✅ Departamentos creados: ${hrDepartment.name}, ${itDepartment.name}`)
-
-  // 3. Crear posiciones
-  const managerPosition = await prisma.position.create({
+  const acmeVentas = await prisma.user.create({
     data: {
-      name: 'Gerente',
-      description: 'Posición gerencial',
-      departmentId: hrDepartment.id,
+      email: 'ventas@acme.com',
+      password: hashedPassword,
+      firstName: 'Laura',
+      lastName: 'Acme',
+      phone: '+1234567891',
+      role: 'USER',
+      isActive: true,
+    },
+  })
+  console.log(`✅ Usuarios creados: ${superuser.email}, ${acmeGerente.email}, ${acmeVentas.email}`)
+  await prisma.company.update({
+    where: { id: company.id },
+    data: { ownerUserId: acmeGerente.id },
+  })
+  await prisma.companyMember.create({
+    data: { userId: acmeGerente.id, companyId: company.id, membershipRole: 'OWNER' },
+  })
+  await prisma.companyMember.create({
+    data: { userId: acmeVentas.id, companyId: company.id, membershipRole: 'USER' },
+  })
+  console.log('✅ Owner y CompanyMember Acme creados')
+
+  // 3. Workify (opcional: si las tablas no existen se omite)
+  let hrDepartment: { id: string; name: string } | null = null
+  let itDepartment: { id: string; name: string } | null = null
+  let adminRole: { id: string; name: string } | null = null
+  let employeeRole: { id: string; name: string } | null = null
+  try {
+    const hrDept = await prisma.department.create({
+      data: {
+        name: 'Recursos Humanos',
+        description: 'Departamento de recursos humanos',
+        companyId: company.id,
+      },
+    })
+    const itDept = await prisma.department.create({
+      data: {
+        name: 'Tecnología',
+        description: 'Departamento de tecnología',
+        companyId: company.id,
+      },
+    })
+    hrDepartment = hrDept
+    itDepartment = itDept
+    console.log(`✅ Departamentos creados: ${hrDept.name}, ${itDept.name}`)
+
+    const managerPosition = await prisma.position.create({
+      data: {
+        name: 'Gerente',
+        description: 'Posición gerencial',
+        departmentId: hrDept.id,
       salaryType: 'MONTH',
       baseSalary: 5000.00,
       overtimeType: 'MULTIPLIER',
@@ -119,32 +190,32 @@ async function main() {
     data: {
       name: 'Desarrollador',
       description: 'Desarrollador de software',
-      departmentId: itDepartment.id,
+      departmentId: itDept.id,
       salaryType: 'MONTH',
       baseSalary: 3000.00,
       overtimeType: 'MULTIPLIER',
       overtimeMultiplier: 1.5,
     },
   })
-  console.log(`✅ Posiciones creadas: ${managerPosition.name}, ${developerPosition.name}`)
+    console.log(`✅ Posiciones creadas: ${managerPosition.name}, ${developerPosition.name}`)
 
-  // 4. Crear roles
-  const adminRole = await prisma.role.create({
-    data: {
-      name: 'Administrador',
-      description: 'Rol de administrador',
-      companyId: company.id,
-    },
-  })
-
-  const employeeRole = await prisma.role.create({
-    data: {
-      name: 'Empleado',
-      description: 'Rol de empleado',
-      companyId: company.id,
-    },
-  })
-  console.log(`✅ Roles creados: ${adminRole.name}, ${employeeRole.name}`)
+    const adminRoleCreate = await prisma.role.create({
+      data: {
+        name: 'Administrador',
+        description: 'Rol de administrador',
+        companyId: company.id,
+      },
+    })
+    const employeeRoleCreate = await prisma.role.create({
+      data: {
+        name: 'Empleado',
+        description: 'Rol de empleado',
+        companyId: company.id,
+      },
+    })
+    adminRole = adminRoleCreate
+    employeeRole = employeeRoleCreate
+    console.log(`✅ Roles creados: ${adminRoleCreate.name}, ${employeeRoleCreate.name}`)
 
   // 5. Crear turnos de trabajo
   const morningShift = await prisma.workShift.create({
@@ -189,75 +260,20 @@ async function main() {
   })
   console.log(`✅ Día festivo creado: ${newYearHoliday.name}`)
 
-  // 7. Crear usuarios: superusuario @multiflow + usuarios por empresa
-  const hashedPassword = await bcrypt.hash('password123', 10)
+    // Asignar roles a usuarios Acme
+    await prisma.userRoleAssignment.create({
+      data: { userId: acmeGerente.id, roleId: adminRole!.id, companyId: company.id },
+    })
+    await prisma.userRoleAssignment.create({
+      data: { userId: acmeVentas.id, roleId: employeeRole!.id, companyId: company.id },
+    })
+    console.log('✅ Roles asignados a usuarios Acme')
 
-  const superuser = await prisma.user.create({
-    data: {
-      email: 'admin@multiflow.com',
-      password: hashedPassword,
-      firstName: 'Admin',
-      lastName: 'Multiflow',
-      phone: '+1234500000',
-      role: 'SUPERADMIN',
-      isActive: true,
-      isSuperuser: true,
-    },
-  })
-
-  const acmeGerente = await prisma.user.create({
-    data: {
-      email: 'gerente@acme.com',
-      password: hashedPassword,
-      firstName: 'Roberto',
-      lastName: 'Acme',
-      phone: '+1234567890',
-      role: 'ADMIN',
-      isActive: true,
-    },
-  })
-
-  const acmeVentas = await prisma.user.create({
-    data: {
-      email: 'ventas@acme.com',
-      password: hashedPassword,
-      firstName: 'Laura',
-      lastName: 'Acme',
-      phone: '+1234567891',
-      role: 'USER',
-      isActive: true,
-    },
-  })
-  console.log(`✅ Usuarios creados: ${superuser.email}, ${acmeGerente.email}, ${acmeVentas.email}`)
-
-  // Acme: owner = gerente (superuser no es miembro de ninguna empresa)
-  await prisma.company.update({
-    where: { id: company.id },
-    data: { ownerUserId: acmeGerente.id },
-  })
-  await prisma.companyMember.create({
-    data: { userId: acmeGerente.id, companyId: company.id, membershipRole: 'OWNER' },
-  })
-  await prisma.companyMember.create({
-    data: { userId: acmeVentas.id, companyId: company.id, membershipRole: 'USER' },
-  })
-  console.log('✅ Owner y CompanyMember Acme creados')
-
-  // 8. Asignar roles a usuarios Acme
-  await prisma.userRoleAssignment.create({
-    data: { userId: acmeGerente.id, roleId: adminRole.id, companyId: company.id },
-  })
-  await prisma.userRoleAssignment.create({
-    data: { userId: acmeVentas.id, roleId: employeeRole.id, companyId: company.id },
-  })
-  console.log('✅ Roles asignados a usuarios Acme')
-
-  // 9. Crear empleados Acme (usuarios @acme.com)
-  const employee1 = await prisma.employee.create({
-    data: {
-      companyId: company.id,
-      departmentId: hrDepartment.id,
-      positionId: managerPosition.id,
+    const employee1 = await prisma.employee.create({
+      data: {
+        companyId: company.id,
+        departmentId: hrDept.id,
+        positionId: managerPosition.id,
       userId: acmeGerente.id,
       firstName: 'Roberto',
       lastName: 'Acme',
@@ -269,10 +285,10 @@ async function main() {
   })
 
   const employee2 = await prisma.employee.create({
-    data: {
-      companyId: company.id,
-      departmentId: itDepartment.id,
-      positionId: developerPosition.id,
+      data: {
+        companyId: company.id,
+        departmentId: itDept.id,
+        positionId: developerPosition.id,
       userId: acmeVentas.id,
       firstName: 'Laura',
       lastName: 'Acme',
@@ -293,13 +309,48 @@ async function main() {
       startDate: new Date('2025-01-01'),
     },
   })
-  console.log('✅ Horarios creados')
+    console.log('✅ Horarios creados')
+  } catch {
+    console.log('⚠️ Tablas Workify no encontradas, omitiendo seed Workify')
+  }
 
   // ========================================
   // SEEDS SHOPFLOW
   // ========================================
 
   console.log('🛒 Creando datos de Shopflow...')
+
+  const daysAgo = (days: number) => new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+  // 0. Crear dos locales (stores) por empresa - Acme
+  const storeAcme1 = await prisma.store.create({
+    data: {
+      companyId: company.id,
+      name: 'Acme Centro',
+      code: 'ACME-CENTRO',
+      address: '123 Main Street, Acme',
+      phone: '+1234567894',
+      email: 'centro@acme.com',
+      active: true,
+    },
+  })
+  const storeAcme2 = await prisma.store.create({
+    data: {
+      companyId: company.id,
+      name: 'Acme Norte',
+      code: 'ACME-NORTE',
+      address: '456 North Ave, Acme',
+      phone: '+1234567897',
+      email: 'norte@acme.com',
+      active: true,
+    },
+  })
+  console.log(`✅ Locales Acme: ${storeAcme1.name} (${storeAcme1.code}), ${storeAcme2.name} (${storeAcme2.code})`)
+
+  await prisma.userStore.create({
+    data: { userId: acmeVentas.id, storeId: storeAcme1.id },
+  })
+  console.log('✅ Local asignado a usuario USER (Acme)')
 
   // 1. Crear categorías Acme (distintas para debug)
   const electronicsCategory = await prisma.category.create({
@@ -386,6 +437,7 @@ async function main() {
       maxStock: 50,
       categoryId: electronicsCategory.id,
       supplierId: supplier1.id,
+      storeId: storeAcme1.id,
       active: true,
     },
   })
@@ -404,6 +456,7 @@ async function main() {
       maxStock: 200,
       categoryId: clothingCategory.id,
       supplierId: supplier2.id,
+      storeId: storeAcme1.id,
       active: true,
     },
   })
@@ -422,6 +475,7 @@ async function main() {
       maxStock: 40,
       categoryId: electronicsCategory.id,
       supplierId: supplier1.id,
+      storeId: storeAcme2.id,
       active: true,
     },
   })
@@ -440,10 +494,50 @@ async function main() {
       maxStock: 300,
       categoryId: officeCategory.id,
       supplierId: supplier3.id,
+      storeId: storeAcme1.id,
       active: true,
     },
   })
-  console.log(`✅ Productos Acme: ${product1.name}, ${product2.name}, ${product3.name}, ${product4.name}`)
+
+  const product5 = await prisma.product.create({
+    data: {
+      companyId: company.id,
+      name: 'Teclado Mecánico [Acme]',
+      description: 'Teclado mecánico retroiluminado - Acme',
+      sku: 'ACME-TEC-001',
+      barcode: '3333444455556',
+      price: 89.99,
+      cost: 55.00,
+      stock: 20,
+      minStock: 5,
+      maxStock: 80,
+      categoryId: electronicsCategory.id,
+      supplierId: supplier1.id,
+      storeId: storeAcme2.id,
+      active: true,
+    },
+  })
+
+  const product6 = await prisma.product.create({
+    data: {
+      companyId: company.id,
+      name: 'Silla Oficina [Acme]',
+      description: 'Silla ergonómica de oficina - Acme',
+      sku: 'ACME-SIL-001',
+      barcode: '4444555566667',
+      price: 149.99,
+      cost: 90.00,
+      stock: 12,
+      minStock: 4,
+      maxStock: 40,
+      categoryId: officeCategory.id,
+      supplierId: supplier3.id,
+      storeId: storeAcme2.id,
+      active: true,
+    },
+  })
+
+  console.log(`✅ Productos Acme: ${product1.name}, ${product2.name}, ${product3.name}, ${product4.name}, ${product5.name}, ${product6.name}`)
 
   // 4. Crear clientes Acme
   const customer1 = await prisma.customer.create({
@@ -528,12 +622,14 @@ async function main() {
   const sale1 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      storeId: storeAcme1.id,
       customerId: customer1.id,
       userId: acmeGerente.id,
       invoiceNumber: 'ACME-INV-0001',
       total: 1319.98,
       subtotal: 1219.98,
       tax: 100.00,
+      createdAt: daysAgo(0),
       status: 'COMPLETED',
       paymentMethod: 'CARD',
       items: {
@@ -547,12 +643,14 @@ async function main() {
   const sale2 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      storeId: storeAcme1.id,
       customerId: customer2.id,
       userId: acmeVentas.id,
       invoiceNumber: 'ACME-INV-0002',
       total: 59.97,
       subtotal: 55.53,
       tax: 4.44,
+      createdAt: daysAgo(3),
       status: 'COMPLETED',
       paymentMethod: 'CASH',
       items: {
@@ -567,22 +665,40 @@ async function main() {
   const sale3 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      storeId: storeAcme2.id,
       customerId: customer3.id,
       userId: acmeGerente.id,
       invoiceNumber: 'ACME-INV-0003',
-      total: 209.98,
-      subtotal: 199.99,
-      tax: 9.99,
+      total: 289.97,
+      subtotal: 269.98,
+      tax: 19.99,
+      createdAt: daysAgo(10),
       status: 'COMPLETED',
       paymentMethod: 'CARD',
       items: {
         create: [
           { productId: product3.id, quantity: 1, price: 199.99, subtotal: 199.99 },
+          { productId: product5.id, quantity: 1, price: 89.99, subtotal: 89.99 },
         ],
       },
     },
   })
   console.log(`✅ Ventas Acme creadas: ${sale1.invoiceNumber}, ${sale2.invoiceNumber}, ${sale3.invoiceNumber}`)
+
+  await prisma.inventoryTransfer.create({
+    data: {
+      companyId: company.id,
+      fromStoreId: storeAcme1.id,
+      toStoreId: storeAcme2.id,
+      productId: product1.id,
+      quantity: 2,
+      status: 'COMPLETED',
+      completedAt: daysAgo(2),
+      createdById: acmeGerente.id,
+      notes: 'Reposición de stock desde Acme Centro a Acme Norte',
+    },
+  })
+  console.log('✅ Transferencia de inventario Acme creada')
 
   // 9. Puntos de fidelidad Acme
   await prisma.loyaltyPoint.create({
@@ -603,6 +719,7 @@ async function main() {
       points: 60,
       type: 'EARNED',
       description: 'Puntos Acme - compra INV-0002',
+      expiresAt: daysAgo(-365),
     },
   })
   console.log('✅ Puntos de fidelidad Acme creados')
@@ -616,30 +733,56 @@ async function main() {
   })
   console.log('✅ Preferencias de usuario Acme creadas')
 
-  // 11. Notificaciones Acme
-  await prisma.notification.create({
-    data: {
-      companyId: company.id,
-      userId: acmeGerente.id,
-      type: 'INFO',
-      priority: 'MEDIUM',
-      title: 'Bienvenido a Acme Inc.',
-      message: 'Sistema Acme - Electrónica y oficina',
-      status: 'UNREAD',
-    },
-  })
-  await prisma.notification.create({
-    data: {
-      companyId: company.id,
-      userId: acmeVentas.id,
-      type: 'INFO',
-      priority: 'LOW',
-      title: 'Ventas Acme',
-      message: 'Panel de ventas Acme Inc.',
-      status: 'UNREAD',
-    },
-  })
-  console.log('✅ Notificaciones Acme creadas')
+  try {
+    await prisma.report.create({
+      data: {
+        companyId: company.id,
+        name: 'Reporte de Ventas Acme',
+        type: 'SALES_SUMMARY',
+        config: { period: 'month', currency: 'USD' },
+      },
+    })
+    await prisma.report.create({
+      data: {
+        companyId: company.id,
+        name: 'Reporte de Inventario Acme',
+        type: 'INVENTORY_STATUS',
+        config: { lowStockThreshold: 10 },
+      },
+    })
+    console.log('✅ Reportes Acme creados')
+  } catch {
+    console.log('⚠️ Tabla reports no encontrada, omitiendo reportes')
+  }
+
+  // 11. Notificaciones Acme (opcional: tabla puede no existir)
+  try {
+    await prisma.notification.create({
+      data: {
+        companyId: company.id,
+        userId: acmeGerente.id,
+        type: 'INFO',
+        priority: 'MEDIUM',
+        title: 'Bienvenido a Acme Inc.',
+        message: 'Sistema Acme - Electrónica y oficina',
+        status: 'UNREAD',
+      },
+    })
+    await prisma.notification.create({
+      data: {
+        companyId: company.id,
+        userId: acmeVentas.id,
+        type: 'INFO',
+        priority: 'LOW',
+        title: 'Ventas Acme',
+        message: 'Panel de ventas Acme Inc.',
+        status: 'UNREAD',
+      },
+    })
+    console.log('✅ Notificaciones Acme creadas')
+  } catch {
+    console.log('⚠️ Tabla notifications no encontrada, omitiendo')
+  }
 
   // ========================================
   // SEGUNDA EMPRESA: Beta Corp.
@@ -695,8 +838,9 @@ async function main() {
   })
   console.log('✅ Owner y CompanyMember Beta creados')
 
-  // Workify: departamentos Beta
-  const salesDepartment = await prisma.department.create({
+  // Workify: departamentos Beta (opcional: tablas pueden no existir)
+  try {
+    const salesDepartment = await prisma.department.create({
     data: {
       name: 'Ventas',
       description: 'Departamento de ventas',
@@ -843,7 +987,40 @@ async function main() {
       startDate: new Date('2025-01-01'),
     },
   })
-  console.log('✅ Horarios Beta creados')
+    console.log('✅ Horarios Beta creados')
+  } catch {
+    console.log('⚠️ Tablas Workify no encontradas, omitiendo seed Workify Beta')
+  }
+
+  // Shopflow: dos locales por empresa - Beta
+  const storeBeta1 = await prisma.store.create({
+    data: {
+      companyId: company2.id,
+      name: 'Beta Sucursal Centro',
+      code: 'BETA-01',
+      address: '100 Central Blvd, Beta',
+      phone: '+1987654322',
+      email: 'centro@betacorp.com',
+      active: true,
+    },
+  })
+  const storeBeta2 = await prisma.store.create({
+    data: {
+      companyId: company2.id,
+      name: 'Beta Sucursal Sur',
+      code: 'BETA-02',
+      address: '200 South St, Beta',
+      phone: '+1987654323',
+      email: 'sur@betacorp.com',
+      active: true,
+    },
+  })
+  console.log(`✅ Locales Beta: ${storeBeta1.name} (${storeBeta1.code}), ${storeBeta2.name} (${storeBeta2.code})`)
+
+  await prisma.userStore.create({
+    data: { userId: ventasBeta.id, storeId: storeBeta1.id },
+  })
+  console.log('✅ Local asignado a usuario USER (Beta)')
 
   // Shopflow: categorías Beta (distintas para debug)
   const homeCategory = await prisma.category.create({
@@ -928,6 +1105,7 @@ async function main() {
       maxStock: 100,
       categoryId: homeCategory.id,
       supplierId: supplier1Beta.id,
+      storeId: storeBeta1.id,
       active: true,
     },
   })
@@ -946,6 +1124,7 @@ async function main() {
       maxStock: 150,
       categoryId: sportsCategory.id,
       supplierId: supplier2Beta.id,
+      storeId: storeBeta1.id,
       active: true,
     },
   })
@@ -964,6 +1143,7 @@ async function main() {
       maxStock: 30,
       categoryId: gardenCategory.id,
       supplierId: supplier3Beta.id,
+      storeId: storeBeta2.id,
       active: true,
     },
   })
@@ -982,10 +1162,50 @@ async function main() {
       maxStock: 50,
       categoryId: sportsCategory.id,
       supplierId: supplier2Beta.id,
+      storeId: storeBeta2.id,
       active: true,
     },
   })
-  console.log(`✅ Productos Beta: ${product1Beta.name}, ${product2Beta.name}, ${product3Beta.name}, ${product4Beta.name}`)
+
+  const product5Beta = await prisma.product.create({
+    data: {
+      companyId: company2.id,
+      name: 'Set Herramientas [Beta]',
+      description: 'Set de herramientas para hogar - Beta',
+      sku: 'BETA-TOOL-001',
+      barcode: '5000123434567',
+      price: 59.99,
+      cost: 30.00,
+      stock: 22,
+      minStock: 8,
+      maxStock: 90,
+      categoryId: homeCategory.id,
+      supplierId: supplier1Beta.id,
+      storeId: storeBeta2.id,
+      active: true,
+    },
+  })
+
+  const product6Beta = await prisma.product.create({
+    data: {
+      companyId: company2.id,
+      name: 'Soga de saltar [Beta]',
+      description: 'Soga de entrenamiento - Beta',
+      sku: 'BETA-ROPE-001',
+      barcode: '5000765432109',
+      price: 12.99,
+      cost: 5.00,
+      stock: 60,
+      minStock: 20,
+      maxStock: 200,
+      categoryId: sportsCategory.id,
+      supplierId: supplier2Beta.id,
+      storeId: storeBeta1.id,
+      active: true,
+    },
+  })
+
+  console.log(`✅ Productos Beta: ${product1Beta.name}, ${product2Beta.name}, ${product3Beta.name}, ${product4Beta.name}, ${product5Beta.name}, ${product6Beta.name}`)
 
   const customer1Beta = await prisma.customer.create({
     data: {
@@ -1065,12 +1285,14 @@ async function main() {
   const sale1Beta = await prisma.sale.create({
     data: {
       companyId: company2.id,
+      storeId: storeBeta1.id,
       customerId: customer1Beta.id,
       userId: gerenteBeta.id,
       invoiceNumber: 'BETA-INV-0001',
       total: 53.99,
       subtotal: 49.99,
       tax: 4.00,
+      createdAt: daysAgo(1),
       status: 'COMPLETED',
       paymentMethod: 'CASH',
       items: {
@@ -1084,18 +1306,20 @@ async function main() {
   const sale2Beta = await prisma.sale.create({
     data: {
       companyId: company2.id,
+      storeId: storeBeta2.id,
       customerId: customer2Beta.id,
       userId: ventasBeta.id,
       invoiceNumber: 'BETA-INV-0002',
-      total: 199.97,
-      subtotal: 185.16,
-      tax: 14.81,
+      total: 179.98,
+      subtotal: 167.98,
+      tax: 12.00,
+      createdAt: daysAgo(6),
       status: 'COMPLETED',
       paymentMethod: 'CARD',
       items: {
         create: [
           { productId: product3Beta.id, quantity: 1, price: 89.99, subtotal: 89.99 },
-          { productId: product2Beta.id, quantity: 2, price: 29.99, subtotal: 59.98 },
+          { productId: product4Beta.id, quantity: 1, price: 79.99, subtotal: 79.99 },
         ],
       },
     },
@@ -1104,22 +1328,40 @@ async function main() {
   const sale3Beta = await prisma.sale.create({
     data: {
       companyId: company2.id,
+      storeId: storeBeta2.id,
       customerId: customer3Beta.id,
       userId: gerenteBeta.id,
       invoiceNumber: 'BETA-INV-0003',
-      total: 79.99,
-      subtotal: 79.99,
-      tax: 0,
+      total: 161.98,
+      subtotal: 149.98,
+      tax: 12.00,
+      createdAt: daysAgo(15),
       status: 'COMPLETED',
       paymentMethod: 'CASH',
       items: {
         create: [
-          { productId: product4Beta.id, quantity: 1, price: 79.99, subtotal: 79.99 },
+          { productId: product5Beta.id, quantity: 1, price: 59.99, subtotal: 59.99 },
+          { productId: product3Beta.id, quantity: 1, price: 89.99, subtotal: 89.99 },
         ],
       },
     },
   })
   console.log(`✅ Ventas Beta creadas: ${sale1Beta.invoiceNumber}, ${sale2Beta.invoiceNumber}, ${sale3Beta.invoiceNumber}`)
+
+  await prisma.inventoryTransfer.create({
+    data: {
+      companyId: company2.id,
+      fromStoreId: storeBeta1.id,
+      toStoreId: storeBeta2.id,
+      productId: product2Beta.id,
+      quantity: 5,
+      status: 'COMPLETED',
+      completedAt: daysAgo(4),
+      createdById: gerenteBeta.id,
+      notes: 'Transferencia de balones a sucursal sur',
+    },
+  })
+  console.log('✅ Transferencia de inventario Beta creada')
 
   await prisma.loyaltyPoint.create({
     data: {
@@ -1139,6 +1381,7 @@ async function main() {
       points: 200,
       type: 'EARNED',
       description: 'Puntos Beta - compra BETA-INV-0002',
+      expiresAt: daysAgo(-365),
     },
   })
   console.log('✅ Puntos de fidelidad Beta creados')
@@ -1151,29 +1394,55 @@ async function main() {
   })
   console.log('✅ Preferencias de usuario Beta creadas')
 
-  await prisma.notification.create({
-    data: {
-      companyId: company2.id,
-      userId: gerenteBeta.id,
-      type: 'INFO',
-      priority: 'MEDIUM',
-      title: 'Bienvenido a Beta Corp.',
-      message: 'Sistema Beta - Hogar, deportes y jardín',
-      status: 'UNREAD',
-    },
-  })
-  await prisma.notification.create({
-    data: {
-      companyId: company2.id,
-      userId: ventasBeta.id,
-      type: 'INFO',
-      priority: 'LOW',
-      title: 'Ventas Beta',
-      message: 'Panel de ventas Beta Corp.',
-      status: 'UNREAD',
-    },
-  })
-  console.log('✅ Notificaciones Beta creadas')
+  try {
+    await prisma.report.create({
+      data: {
+        companyId: company2.id,
+        name: 'Reporte de Ventas Beta',
+        type: 'SALES_SUMMARY',
+        config: { period: 'week', currency: 'USD' },
+      },
+    })
+    await prisma.report.create({
+      data: {
+        companyId: company2.id,
+        name: 'Reporte de Inventario Beta',
+        type: 'INVENTORY_STATUS',
+        config: { lowStockThreshold: 10 },
+      },
+    })
+    console.log('✅ Reportes Beta creados')
+  } catch {
+    console.log('⚠️ Tabla reports no encontrada, omitiendo reportes')
+  }
+
+  try {
+    await prisma.notification.create({
+      data: {
+        companyId: company2.id,
+        userId: gerenteBeta.id,
+        type: 'INFO',
+        priority: 'MEDIUM',
+        title: 'Bienvenido a Beta Corp.',
+        message: 'Sistema Beta - Hogar, deportes y jardín',
+        status: 'UNREAD',
+      },
+    })
+    await prisma.notification.create({
+      data: {
+        companyId: company2.id,
+        userId: ventasBeta.id,
+        type: 'INFO',
+        priority: 'LOW',
+        title: 'Ventas Beta',
+        message: 'Panel de ventas Beta Corp.',
+        status: 'UNREAD',
+      },
+    })
+    console.log('✅ Notificaciones Beta creadas')
+  } catch {
+    console.log('⚠️ Tabla notifications no encontrada, omitiendo')
+  }
 
   console.log('✅ Seed completado exitosamente!')
 }

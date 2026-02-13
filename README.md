@@ -112,6 +112,8 @@ El seed incluye:
 
 **Nota**: El seed limpia todos los datos existentes antes de insertar nuevos datos.
 
+**Locales de venta (Shopflow)**: El seed crea dos locales por empresa (Acme y Beta). Para que el selector "Local de venta" en Shopflow muestre opciones, la **API** debe usar la **misma base de datos** que usaste para el seed: configura la misma `DATABASE_URL` en `api/.env` que en `database/.env` (o la que usas al ejecutar `pnpm db:seed`).
+
 ## Migraciones
 
 ```bash
